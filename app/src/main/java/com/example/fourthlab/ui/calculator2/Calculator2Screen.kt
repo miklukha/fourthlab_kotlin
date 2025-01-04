@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -21,28 +22,30 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.fourthlab.ui.theme.Purple40
 import com.example.fourthlab.ui.theme.White
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 
-// дані збитків
-data class LossesData(
-    val lossesEmergencyDowntime: Double = 0.0,
-    val lossesPlannedDowntime: Double = 0.0,
+// вхідні дані
+data class Data(
+    val power: Int = 0,
 )
 
 // результати розрахунків
 data class CalculationResults(
-    val mathExpectationLosses: Double = 0.0
+    val initialCurrentValue: Double = 0.0
 )
 
 @Composable
 fun Calculator2Screen(
     goBack: () -> Unit,
 ) {
-    var data by remember { mutableStateOf(LossesData()) }
+    var data by remember { mutableStateOf(Data()) }
     var results by remember { mutableStateOf<CalculationResults?>(null) }
 
     Column(
@@ -51,16 +54,18 @@ fun Calculator2Screen(
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            "Калькулятор рахування збитків від перерв електропостачання",
+            "Калькулятор визначення струмів КЗ на шинах 10 кВ ГПП",
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        InputField("Збитки (аварійні вимкнення)", data.lossesEmergencyDowntime) {
-            data = data.copy(lossesEmergencyDowntime = it)
-        }
-        InputField("Збитки (планові вимкнення)", data.lossesPlannedDowntime) {
-            data = data.copy(lossesPlannedDowntime = it)
+        Text(
+            "Визначити струми К3 на шинах 10 кВ ГПП. Потужність К3 200 МВ А. Для перевірки вибраних кабелів та вимикачів необіхдно розрахувати струми К3 на шинах низької напруги ГПП",
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+
+        InputField("Потужність КЗ", data.power) {
+            data = data.copy(power = it)
         }
 
         Button(
@@ -94,15 +99,18 @@ fun Calculator2Screen(
 }
 
 @Composable
-private fun InputField(
+fun InputField(
     label: String,
-    value: Double,
-    onValueChange: (Double) -> Unit
+    value: Int,
+    onValueChange: (Int) -> Unit
 ) {
     OutlinedTextField(
-        value = if (value == 0.0) "" else value.toString(),
-        onValueChange = { onValueChange(it.toDoubleOrNull() ?: 0.0) },
+        value = if (value == 0) "" else value.toString(),
+        onValueChange = {
+            onValueChange(it.toInt())
+        },
         label = { Text(label) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
@@ -122,8 +130,8 @@ fun DisplayResults(results: CalculationResults) {
             modifier = Modifier.padding(bottom = 8.dp)
         )
         ResultItem(
-            "Математичне сподівання збитків\nвід переривання електропостачання:",
-            results.mathExpectationLosses
+            "Початкове діюче значення \nструму трифазного КЗ:",
+            results.initialCurrentValue, "кА"
         )
 
     }
@@ -131,7 +139,7 @@ fun DisplayResults(results: CalculationResults) {
 
 
 @Composable
-fun ResultItem(label: String, value: Double) {
+fun ResultItem(label: String, value: Double, sign: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -139,15 +147,20 @@ fun ResultItem(label: String, value: Double) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label)
-        Text(String.format("%.4f", value))
+        Text(String.format("%.1f", value) + " " + sign)
 //        Text(Math.round(value).toString())
     }
 }
 
 
-private fun calculateResults(data: LossesData): CalculationResults {
-    // частота відмов
-    val failureRate = 0.01
+private fun calculateResults(data: Data): CalculationResults {
+    // середня номінальна напруга точки, в якій виникає КЗ
+    val usn = 10.5
+    // номінальна потужність трансформатора
+    val snomt = 6.3
+    val uk = 10.5
+
+
     // середній час відновлення трансформатора напругою 35 кВ
     val recoveryTimeT = 45 * 0.001
     // середній час планового простою трансформатора напругою 35 кВ
@@ -155,19 +168,18 @@ private fun calculateResults(data: LossesData): CalculationResults {
     val pm = 5.12 * 1000
     val tm = 6451
 
-    // математичне сподівання аварійного недовідпущення електроенергії
-    val mathExpectationEmergency = failureRate * recoveryTimeT * pm * tm
+    // опори елементів заступної схеми
+    val xc = usn.pow(2) / data.power
+    val xt = (uk / 100) * (usn.pow(2) / snomt)
 
-    // математичне сподівання планового недовідпущення електроенергії
-    val mathExpectationPlanned = averageTime * pm * tm
+    // сумарний опір для точки К1
+    val totalResistance = xc + xt
 
-    // математичне сподівання збитків від переривання електропостачання
-    val mathExpectationLosses =
-        data.lossesEmergencyDowntime * mathExpectationEmergency +
-                data.lossesPlannedDowntime * mathExpectationPlanned
+    // початкове діюче значення струму трифазного КЗ
+    val initialCurrentValue = usn / (sqrt(3.0) * totalResistance)
 
     return CalculationResults(
-        mathExpectationLosses = mathExpectationLosses
+        initialCurrentValue = initialCurrentValue
     )
 }
 
