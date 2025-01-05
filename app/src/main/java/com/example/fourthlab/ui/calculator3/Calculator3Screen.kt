@@ -1,6 +1,6 @@
 package com.example.fourthlab.ui.calculator3
 
-import android.util.Log
+import android.annotation.SuppressLint
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.example.fourthlab.ui.theme.Purple40
 import com.example.fourthlab.ui.theme.White
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 // вхідні дані
@@ -38,20 +39,20 @@ data class Data(
 
 // результати розрахунків
 data class CalculationResults(
-    val iThreeNormal: Double = 0.0,
-    val iThreeMinimal: Double = 0.0,
-    val iTwoNormal: Double = 0.0,
-    val iTwoMinimal: Double = 0.0,
+    val iThreeNormal: Int = 0,
+    val iThreeMinimal: Int = 0,
+    val iTwoNormal: Int = 0,
+    val iTwoMinimal: Int = 0,
 
-    val iThreeNormalActual: Double = 0.0,
-    val iThreeMinimalActual: Double = 0.0,
-    val iTwoNormalActual: Double = 0.0,
-    val iTwoMinimalActual: Double = 0.0,
+    val iThreeNormalActual: Int = 0,
+    val iThreeMinimalActual: Int = 0,
+    val iTwoNormalActual: Int = 0,
+    val iTwoMinimalActual: Int = 0,
 
-    val iThreeNormal10: Double = 0.0,
-    val iThreeMinimal10: Double = 0.0,
-    val iTwoNormal10: Double = 0.0,
-    val iTwoMinimal10: Double = 0.0,
+    val iThreeNormal10: Int = 0,
+    val iThreeMinimal10: Int = 0,
+    val iTwoNormal10: Int = 0,
+    val iTwoMinimal10: Int = 0,
 )
 
 @Composable
@@ -179,7 +180,7 @@ fun ResultSection(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-fun ResultItem(label: String, value: Double, sign: String? = null) {
+fun ResultItem(label: String, value: Int, sign: String? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -187,13 +188,11 @@ fun ResultItem(label: String, value: Double, sign: String? = null) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label)
-//        Text(Math.round(value).toString())
-//        Text(String.format("%.2f", value) + " " + sign)
-//        Text(value.toString() + " " + sign)
-
+        Text(value.toString() + " " + sign)
     }
 }
 
+@SuppressLint("DefaultLocale")
 private fun calculateResults(data: Data): CalculationResults {
     val ukmax = 11.1
     val uvn = 115
@@ -205,47 +204,52 @@ private fun calculateResults(data: Data): CalculationResults {
 
     // реактивний опір (реактанс) ТМН 6300/110
     val xt = Math.round((ukmax * uvn.toDouble().pow(2)) / (100 * snomt))
-    Log.d("XT", xt.toString())
 
     // опори на шинах 10 кВ в нормальному та мінімальному режимах,
     // що приведені до напруги 110 кВ
     val rTire = data.rcn
     val xTire = data.xcn + xt
-    val zTire = sqrt(rTire.pow(2) + xTire.pow(2))
+    val zTire = String.format("%.1f", (sqrt(rTire.pow(2) + xTire.pow(2)))).toDouble()
     val rTireMinimal = data.rcmin
     val xTireMinimal = data.xcmin + xt
-    val zTireMinimal = sqrt(rTireMinimal.pow(2) + xTireMinimal.pow(2))
+    val zTireMinimal =
+        String.format("%.1f", (sqrt(rTireMinimal.pow(2) + xTireMinimal.pow(2)))).toDouble()
 
-    // Струми трифазного КЗ на шинах 10 кВ, приведені до напруги 110 кВ (нормальний режим)
-    val iThreeNormal = uvn * 10.0.pow(3) / (sqrt(3.0) * zTire)
-    // Струми трифазного КЗ на шинах 10 кВ, приведені до напруги 110 кВ (мінімальний режим)
-    val iThreeMinimal = uvn * 10.0.pow(3) / (sqrt(3.0) * zTireMinimal)
+    // Струми трифазного КЗ на шинах 10 кВ, приведені до напруги 110 кВ
+    // (нормальний режим)
+    val iThreeNormal = (uvn * 1000 / (1.73 * zTire)).roundToInt()
+    // (мінімальний режим)
+    val iThreeMinimal = (uvn * 1000 / (1.73 * zTireMinimal)).roundToInt()
 
-    // Струми двофазного КЗ на шинах 10 кВ, приведені до напруги 110 кВ (нормальний режим)
-    val iTwoNormal = iThreeNormal * (sqrt(3.0)/2)
-    // Струми двофазного КЗ на шинах 10 кВ, приведені до напруги 110 кВ (мінімальний режим)
-    val iTwoMinimal = iThreeMinimal * (sqrt(3.0)/2)
+    // Струми двофазного КЗ на шинах 10 кВ, приведені до напруги 110 кВ
+    // (нормальний режим)
+    val iTwoNormal = (iThreeNormal * (1.73 / 2)).roundToInt()
+    // (мінімальний режим)
+    val iTwoMinimal = (iThreeMinimal * (1.73 / 2)).roundToInt()
 
     // коефіцієнт приведення для визначення дійсних струмів на шинах 10 кВ
-    val kpr = unn.toDouble().pow(2) / uvn.toDouble().pow(2)
+    val kpr = String.format("%.3f", unn.toDouble().pow(2) / uvn.toDouble().pow(2)).toDouble()
 
     // опори на шинах 10 кВ в нормальному та мінімальному режимах
-    val rTireN = rTire * kpr
-    val xTireN = xTire * kpr
-    val zTireN = sqrt(rTireN.pow(2) + xTireN.pow(2))
-    val rTireNMinimal = rTireMinimal * kpr
-    val xTireNMinimal = xTireMinimal * kpr
-    val zTireNMinimal = sqrt(rTireNMinimal.pow(2) + xTireNMinimal.pow(2))
+    val rTireN = String.format("%.1f", rTire * kpr).toDouble()
+    val xTireN = String.format("%.2f", xTire * kpr).toDouble()
+    val zTireN = String.format("%.2f", (sqrt(rTireN.pow(2) + xTireN.pow(2)))).toDouble()
+    val rTireNMinimal = String.format("%.2f", rTireMinimal * kpr).toDouble()
+    val xTireNMinimal = String.format("%.2f", xTireMinimal * kpr).toDouble()
+    val zTireNMinimal =
+        String.format("%.1f", (sqrt(rTireNMinimal.pow(2) + xTireNMinimal.pow(2)))).toDouble()
 
-    // Дійсні струми трифазного КЗ на шинах 10 кВ (нормальний режим)
-    val iThreeNormalActual = unn * 10.0.pow(3) / (sqrt(3.0) * zTireN)
-    // Дійсні струми трифазного КЗ на шинах 10 кВ (мінімальний режим)
-    val iThreeMinimalActual = unn * 10.0.pow(3) / (sqrt(3.0) * zTireNMinimal)
+    // Дійсні струми трифазного КЗ на шинах 10 кВ
+    // (нормальний режим)
+    val iThreeNormalActual = (unn * 1000 / (1.73 * zTireN)).roundToInt()
+    // (мінімальний режим)
+    val iThreeMinimalActual = (unn * 1000 / (1.73 * zTireNMinimal)).roundToInt()
 
-    // Дійсні струми двофазного КЗ на шинах 10 кВ (нормальний режим)
-    val iTwoNormalActual = iThreeNormalActual * (sqrt(3.0)/2)
-    // Дійсні струми двофазного КЗ на шинах 10 кВ (мінімальний режим)
-    val iTwoMinimalActual = iThreeMinimalActual * (sqrt(3.0)/2)
+    // Дійсні струми двофазного КЗ на шинах 10 кВ
+    // (нормальний режим)
+    val iTwoNormalActual = (iThreeNormalActual * (1.73 / 2)).roundToInt()
+    // (мінімальний режим)
+    val iTwoMinimalActual = (iThreeMinimalActual * (1.73 / 2)).roundToInt()
 
     // довжина лінії електропередач
     val il = 0.2 + 0.35 + 0.2 + 0.6 + 2 + 2.55 + 3.37 + 3.1
@@ -255,23 +259,25 @@ private fun calculateResults(data: Data): CalculationResults {
     val xl = il * x0
 
     // опори в точці 10 в нормальному та мінімальному режимах
-    val r10n = rl + rTireN
-    val x10n = xl + xTireN
-    val z10n = sqrt(r10n.pow(2) + x10n.pow(2))
-    val r10nMinimal = rl + rTireNMinimal
-    val x10nMinimal = xl + xTireNMinimal
-    val z10nMinimal = sqrt(r10nMinimal.pow(2) + x10nMinimal.pow(2))
+    val r10n = String.format("%.2f", rl + rTireN).toDouble()
+    val x10n = String.format("%.2f", xl + xTireN).toDouble()
+    val z10n = String.format("%.2f", (sqrt(r10n.pow(2) + x10n.pow(2)))).toDouble()
+    val r10nMinimal = String.format("%.2f", rl + rTireNMinimal).toDouble()
+    val x10nMinimal = String.format("%.1f", xl + xTireNMinimal).toDouble()
+    val z10nMinimal =
+        String.format("%.2f", (sqrt(r10nMinimal.pow(2) + x10nMinimal.pow(2)))).toDouble()
 
-    // Струми трифазного КЗ в точці 10 (нормальний режим)
-    val iThreeNormal10 = unn * 10.0.pow(3) / (sqrt(3.0) * z10n)
-    // Струми трифазного КЗ в точці 10 (мінімальний режим)
-    val iThreeMinimal10 = unn * 10.0.pow(3) / (sqrt(3.0) * z10nMinimal)
+    // Струми трифазного КЗ в точці 10
+    // (нормальний режим)
+    val iThreeNormal10 = (unn * 1000 / (1.73 * z10n)).roundToInt()
+    // (мінімальний режим)
+    val iThreeMinimal10 = (unn * 1000 / (1.73 * z10nMinimal)).roundToInt()
 
-    // Струми двофазного КЗ в точці 10 (нормальний режим)
-    val iTwoNormal10 = iThreeNormal10 * (sqrt(3.0)/2)
-    // Струми двофазного КЗ в точці 10 (мінімальний режим)
-    val iTwoMinimal10 = iThreeMinimal10 * (sqrt(3.0)/2)
-
+    // Струми двофазного КЗ в точці 10
+    // (нормальний режим)
+    val iTwoNormal10 = (iThreeNormal10 * (1.73 / 2)).roundToInt()
+    // (мінімальний режим)
+    val iTwoMinimal10 = (iThreeMinimal10 * (1.73 / 2)).roundToInt()
 
     return CalculationResults(
         iThreeNormal = iThreeNormal,
